@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Jelly Tasks</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Jelly Tasks</h1>
+      <div class="header-buttons">
+        <button id="configButton" class="button icon-button">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button id="addTask" class="button primary-button">+ New Task</button>
+      <button id="clearCompleted" class="button secondary-button">Clear Completed</button>
+    </div>
+
+    <div id="loadingIndicator" class="loading-indicator hidden">Loading tasks...</div>
+    <div id="errorMessage" class="error-message hidden"></div>
+    <div id="tasks"></div>
+
+    <!-- New Task Form -->
+    <div id="newTaskForm" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h2 class="modal-title">New Task</h2>
+        <div class="form-group">
+          <label for="newTaskTitle">Title</label>
+          <input type="text" id="newTaskTitle" class="input-field" placeholder="Enter task title">
+        </div>
+        <div class="form-group">
+          <label for="newTaskNotes">Notes (optional)</label>
+          <textarea id="newTaskNotes" class="input-field" placeholder="Add notes"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="newTaskDate">Due Date (optional)</label>
+          <input type="date" id="newTaskDate" class="input-field">
+        </div>
+        <div class="form-group">
+          <label for="taskListSelect">List</label>
+          <select id="taskListSelect" class="input-field"></select>
+        </div>
+        <div class="button-group">
+          <button id="saveTask" class="button primary-button">Add Task</button>
+          <button id="cancelTask" class="button secondary-button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Task Form -->
+    <div id="editTaskForm" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h2 class="modal-title">Edit Task</h2>
+        <div class="form-group">
+          <label for="editTaskTitle">Title</label>
+          <input type="text" id="editTaskTitle" class="input-field" placeholder="Enter task title">
+        </div>
+        <div class="form-group">
+          <label for="editTaskNotes">Notes (optional)</label>
+          <textarea id="editTaskNotes" class="input-field" placeholder="Add notes"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="editTaskDate">Due Date (optional)</label>
+          <input type="date" id="editTaskDate" class="input-field">
+        </div>
+        <div class="button-group">
+          <button class="delete-task-button">Delete Task</button>
+          <button id="updateTask" class="button primary-button">Save Changes</button>
+          <button id="cancelEdit" class="button secondary-button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Config Menu -->
+    <div id="configMenu" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h2 class="modal-title">Settings</h2>
+        <div class="config-section">
+          <div class="section-header">
+            <h3>Task Lists</h3>
+            <button id="addListButton" class="button secondary-button">+ New List</button>
+          </div>
+          <div class="list-controls">
+            <button id="selectAllLists" class="button secondary-button">Select All</button>
+          </div>
+          <div id="listSelection" class="list-selection">
+            <!-- Task lists will be populated here -->
+          </div>
+        </div>
+
+        <!-- New List Form -->
+        <div id="newListForm" class="new-list-form hidden">
+          <div class="form-group">
+            <label for="newListTitle">List Name</label>
+            <input type="text" id="newListTitle" class="input-field" placeholder="Enter list name">
+          </div>
+          <div class="button-group">
+            <button id="saveNewList" class="button primary-button">Create</button>
+            <button id="cancelNewList" class="button secondary-button">Cancel</button>
+          </div>
+        </div>
+
+        <div class="button-group config-buttons">
+          <button id="logoutButton" class="button danger-button">Sign Out</button>
+          <div class="right-buttons">
+            <button id="saveConfig" class="button primary-button">Save</button>
+            <button id="closeConfig" class="button secondary-button">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login overlay -->
+  <div id="loginPrompt" class="modal-overlay">
+    <div class="login-content">
+      <h1>Welcome to Jelly Tasks</h1>
+      <p>Please sign in to manage your tasks</p>
+      <button id="loginButton" class="google-button">
+        <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGcgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIj48cGF0aCBkPSJNMTcuNiA5LjJsLS4xLTEuOEg5djMuNGg0LjhDMTMuNiAxMiAxMyAxMyAxMiAxMy42djIuMmgzYTguOCA4LjggMCAwIDAgMi42LTYuNnoiIGZpbGw9IiNGRkYiIGZpbGwtcnVsZT0ibm9uemVybyIvPjxwYXRoIGQ9Ik05IDE4YzIuNCAwIDQuNS0uOCA2LTIuMmwtMy0yLjJhNS40IDUuNCAwIDAgMS04LTIuOUgxVjEzYTkgOSAwIDAgMCA4IDV6IiBmaWxsPSIjRkZGIiBmaWxsLXJ1bGU9Im5vbnplcm8iLz48cGF0aCBkPSJNNCAxMC43YTUuNCA1LjQgMCAwIDEgMC0zLjRWNUgxYTkgOSAwIDAgMCAwIDhsMy0yLjN6IiBmaWxsPSIjRkZGIiBmaWxsLXJ1bGU9Im5vbnplcm8iLz48cGF0aCBkPSJNOSAzLjZjMS4zIDAgMi41LjQgMy40IDEuM0wxNSAyLjNBOSA5IDAgMCAwIDEgNWwzIDIuNGE1LjQgNS40IDAgMCAxIDUtMy43eiIgZmlsbD0iI0ZGRiIgZmlsbC1ydWxlPSJub256ZXJvIi8+PHBhdGggZD0iTTAgMGgxOHYxOEgweiIvPjwvZz48L3N2Zz4=" alt="Google">
+        Sign in with Google
+      </button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html> 
