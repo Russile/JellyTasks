@@ -22,4 +22,9 @@ Thumbs.db
 
 # Extension specific
 *.pem
-*.crx 
+*.crx
+*.zip
+
+# Store assets (exclude from extension package but keep in git)
+!store-assets/
+!store-assets/*
