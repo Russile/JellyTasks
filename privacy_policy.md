@@ -45,4 +45,4 @@ You have the right to:
 We may update this privacy policy from time to time. We will notify users of any material changes by updating the "Last Updated" date.
 
 ## Contact
-For any questions about this privacy policy, please create an issue in our GitHub repository or contact us at [Your Contact Information]. 
+For any questions about this privacy policy, please visit https://github.com/Russile/JellyTasks/blob/master/privacy_policy.md.
