@@ -18,21 +18,31 @@
             padding: 40px 20px;
         }
         h1 { color: #1a73e8; }
-        .links {
-            margin-top: 30px;
+        .description {
+            margin: 20px 0;
+            font-size: 1.1em;
+        }
+        .privacy-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
         }
         .privacy-link {
-            display: block;
-            margin: 20px 0;
-            font-weight: bold;
-            color: #1a73e8;
+            display: inline-block;
+            margin: 10px 0;
+            padding: 10px 20px;
+            background: #1a73e8;
+            color: white;
             text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
         }
         .privacy-link:hover {
-            text-decoration: underline;
+            background: #1557b0;
         }
         .other-links {
-            margin-top: 20px;
+            margin-top: 30px;
         }
         .other-links a {
             color: #1a73e8;
@@ -47,9 +57,17 @@
 <body>
     <div class="container">
         <h1>Jelly Tasks</h1>
-        <p>A browser extension for quick access to Google Tasks</p>
         
-        <a href="privacy_policy.html" class="privacy-link">Privacy Policy</a>
+        <div class="description">
+            <p>A browser extension for quick and efficient access to Google Tasks. Manage your tasks directly from your browser with just one click.</p>
+            <p>This extension requires access to your Google Tasks data to provide its functionality.</p>
+        </div>
+
+        <div class="privacy-section">
+            <h2>Privacy Information</h2>
+            <p>We take your privacy seriously. Read our privacy policy to understand how we handle your data.</p>
+            <a href="privacy_policy.html" class="privacy-link">View Privacy Policy</a>
+        </div>
         
         <div class="other-links">
             <a href="https://github.com/Russile/JellyTasks">GitHub Repository</a>
