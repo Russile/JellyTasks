@@ -3,7 +3,6 @@
   "name": "Jelly Tasks",
   "version": "1.0",
   "description": "Quick access to Google Tasks",
-  "privacy_policy": "https://russile.github.io/JellyTasks/privacy_policy.html",
   "permissions": [
     "identity",
     "storage",
@@ -32,5 +31,6 @@
       "https://www.googleapis.com/auth/tasks",
       "https://www.googleapis.com/auth/tasks.readonly"
     ]
-  }
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA..."
 } 
