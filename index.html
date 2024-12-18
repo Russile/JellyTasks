@@ -21,12 +21,25 @@
         .links {
             margin-top: 30px;
         }
-        a {
+        .privacy-link {
+            display: block;
+            margin: 20px 0;
+            font-weight: bold;
+            color: #1a73e8;
+            text-decoration: none;
+        }
+        .privacy-link:hover {
+            text-decoration: underline;
+        }
+        .other-links {
+            margin-top: 20px;
+        }
+        .other-links a {
             color: #1a73e8;
             text-decoration: none;
             margin: 0 10px;
         }
-        a:hover {
+        .other-links a:hover {
             text-decoration: underline;
         }
     </style>
@@ -36,8 +49,9 @@
         <h1>Jelly Tasks</h1>
         <p>A browser extension for quick access to Google Tasks</p>
         
-        <div class="links">
-            <a href="privacy_policy.html">Privacy Policy</a> |
+        <a href="privacy_policy.html" class="privacy-link">Privacy Policy</a>
+        
+        <div class="other-links">
             <a href="https://github.com/Russile/JellyTasks">GitHub Repository</a>
         </div>
     </div>
