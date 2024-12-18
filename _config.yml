@@ -1,3 +1,0 @@
-include: [".well-known"]
-keep_files: [".well-known"]
-permalink: pretty 
