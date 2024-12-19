@@ -107,12 +107,16 @@ The repository has two main branches:
      4. Load your extension unpacked
      5. Copy the generated extension ID
 5. Click "Create"
-6. Copy the generated Client ID (you'll need this for the next step)
+6. Copy the generated Client ID
 
 ### 4. Configure the Extension
 
 1. Open `manifest.json`
-2. Replace `${YOUR_CLIENT_ID}` with your actual OAuth client ID from the previous step
+2. Update the `oauth2.client_id` field with your OAuth client ID
+3. If you're developing for both Chrome and Edge:
+   - Create separate OAuth clients for each browser
+   - Update both client IDs in `popup.js`
+   - The extension will automatically use the correct ID based on the browser
 
 ### 5. Install the Extension
 
