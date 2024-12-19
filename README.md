@@ -1,4 +1,4 @@
-# Google Tasks Extension
+# Jelly Tasks
 
 A Chrome/Edge browser extension that provides quick access to Google Tasks, allowing you to view, create, and manage your tasks directly from the browser toolbar.
 
@@ -9,6 +9,57 @@ A Chrome/Edge browser extension that provides quick access to Google Tasks, allo
 - Mark tasks as complete/incomplete
 - Clean, modern interface
 - Secure Google OAuth2 authentication
+
+## Branch Structure
+
+The repository has two main branches:
+
+### master (Development)
+- Used for development and testing
+- Contains the manifest key for consistent extension ID during testing
+- All new features and changes should be made here first
+- Current extension ID: `aganahgeappngacbjcolbfhinhhjmgpn`
+
+### production
+- Matches what's submitted to the store
+- No manifest key (store assigns its own ID)
+- Store extension ID: `enlnahggfholgnfjndgmkabbpiaocna`
+- Merge from master when ready for store submission
+
+## Development Workflow
+
+1. **Making Changes**
+   - Work in the `master` branch
+   - Test thoroughly with the development extension ID
+   - Commit and push changes to `master`
+
+2. **Store Submission**
+   - Merge changes from `master` to `production`
+   - Remove the manifest key if present
+   - Create a new build in `builds/v1.0/`
+   - Submit the new build to the store
+
+3. **Common Git Commands**
+   ```bash
+   # Switch to master for development
+   git checkout master
+
+   # Create a new feature branch (optional)
+   git checkout -b feature-name
+
+   # Commit changes
+   git add .
+   git commit -m "Description of changes"
+   git push
+
+   # Prepare for store submission
+   git checkout production
+   git merge master
+   # Remove key from manifest.json
+   git add manifest.json
+   git commit -m "Update for store submission"
+   git push
+   ```
 
 ## Setup Instructions
 
