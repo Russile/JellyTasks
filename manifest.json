@@ -1,6 +1,5 @@
 {
   "manifest_version": 3,
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAhf04g+9zz+0tFPrHQbqO6HtHkGR/U7+YYfpfUNK8QOgwqwZvgn5EXSrwWmiwwrVYHtzKGYThxpB/0Y4UGqJvGJXwKqbvgUUPx3b/R4z0OFOP8395HzOC1pGp7qUzpOZEo0dG7sFCjG6MRqhXeLOHDVj4DeDRBnbqP0JnEp+5Hi3v8LgNZhGg6F+5FNrJ+GXf2v7P5p8J6jzg7qQQbhVJDl7GRczf0PZG4v7WTzxRaHrp06VY/IJ4qHUqzikCA4zPM4OGPt+CJzCLvok+4R9qKqwZZGRVe9J7RqBQkLgnBbBA6kkhUJhV3oQuQvzGRC4jdFVZHGBKOEHhABQFYwIDAQAB",
   "name": "Jelly Tasks",
   "version": "1.0",
   "description": "Quick access to Google Tasks",
