@@ -16,6 +16,10 @@ A Chrome/Edge browser extension that provides quick access to Google Tasks, allo
 - Immediate UI feedback for all actions
 - Reliable task operations with proper error handling
 - Smooth animations and transitions
+- Accurate date handling with proper timezone support
+- Consistent task list order in dropdowns
+- Improved task list switching with no duplicates
+- Material design edit icons for consistent UI
 
 ## Branch Structure
 
