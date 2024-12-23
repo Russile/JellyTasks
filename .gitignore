@@ -23,7 +23,7 @@ Thumbs.db
 # Extension specific
 *.pem
 *.crx
-*.zip
+/*.zip
 
 # Store assets (exclude from extension package but keep in git)
 !store-assets/
@@ -31,3 +31,7 @@ Thumbs.db
 
 # Development notes
 dev-notes.md
+
+# Private keys and certificates
+*.pem
+private/

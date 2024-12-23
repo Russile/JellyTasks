@@ -1,14 +1,98 @@
-# Google Tasks Extension
+# Jelly Tasks
 
 A Chrome/Edge browser extension that provides quick access to Google Tasks, allowing you to view, create, and manage your tasks directly from the browser toolbar.
 
 ## Features
 
-- View all your Google Tasks lists
-- Create new tasks with titles and optional notes
+- View and manage all your Google Tasks lists
+- Create, edit, and delete task lists
+- Customize list colors for better organization
+- Create new tasks with titles, notes, and due dates
+- Edit tasks and move them between lists
 - Mark tasks as complete/incomplete
-- Clean, modern interface
+- Clean, modern interface with material icons
 - Secure Google OAuth2 authentication
+- Drag and drop list reordering
+- Immediate UI feedback for all actions
+- Reliable task operations with proper error handling
+- Smooth animations and transitions
+- Accurate date handling with proper timezone support
+- Consistent task list order in dropdowns
+- Improved task list switching with no duplicates
+- Material design edit icons for consistent UI
+
+## Branch Structure
+
+The repository has two main branches:
+
+### master (Development)
+- Used for development and testing
+- Contains the manifest key for consistent extension ID during testing
+- All new features and changes should be made here first
+- Current extension ID: `aganahgeappngacbjcolbfhinhhjmgpn`
+
+### production
+- Matches what's submitted to the store
+- No manifest key (store assigns its own ID)
+- Store extension ID: `enlnahggfholgnfjndgmkabbpiaocna`
+- Merge from master when ready for store submission
+
+## Development Workflow
+
+1. **Feature Development**
+   - Create a new feature branch from `master`:
+     ```bash
+     git checkout master
+     git pull
+     git checkout -b feature/your-feature-name
+     ```
+   - Make and test changes in your feature branch
+   - Commit and push changes regularly:
+     ```bash
+     git add .
+     git commit -m "Description of changes"
+     git push -u origin feature/your-feature-name
+     ```
+
+2. **Making Changes**
+   - Work in your feature branch
+   - Test thoroughly with the development extension ID
+   - Create a Pull Request when ready to merge into `master`
+
+3. **Store Submission**
+   - Merge tested features from `master` to `production`
+   - Remove the manifest key if present
+   - Create a new build in `builds/v1.0/`
+   - Submit the new build to the store
+
+4. **Common Git Commands**
+   ```bash
+   # Check current branch
+   git branch
+
+   # Create and switch to feature branch
+   git checkout -b feature/your-feature-name
+
+   # Switch between branches
+   git checkout master
+   git checkout feature/your-feature-name
+
+   # Update your branch with latest changes
+   git pull origin master
+
+   # Commit changes
+   git add .
+   git commit -m "Description of changes"
+   git push
+
+   # Prepare for store submission
+   git checkout production
+   git merge master
+   # Remove key from manifest.json
+   git add manifest.json
+   git commit -m "Update for store submission"
+   git push
+   ```
 
 ## Setup Instructions
 
@@ -56,12 +140,16 @@ A Chrome/Edge browser extension that provides quick access to Google Tasks, allo
      4. Load your extension unpacked
      5. Copy the generated extension ID
 5. Click "Create"
-6. Copy the generated Client ID (you'll need this for the next step)
+6. Copy the generated Client ID
 
 ### 4. Configure the Extension
 
 1. Open `manifest.json`
-2. Replace `${YOUR_CLIENT_ID}` with your actual OAuth client ID from the previous step
+2. Update the `oauth2.client_id` field with your OAuth client ID
+3. If you're developing for both Chrome and Edge:
+   - Create separate OAuth clients for each browser
+   - Update both client IDs in `popup.js`
+   - The extension will automatically use the correct ID based on the browser
 
 ### 5. Install the Extension
 
