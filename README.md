@@ -4,11 +4,18 @@ A Chrome/Edge browser extension that provides quick access to Google Tasks, allo
 
 ## Features
 
-- View all your Google Tasks lists
-- Create new tasks with titles and optional notes
+- View and manage all your Google Tasks lists
+- Create, edit, and delete task lists
+- Customize list colors for better organization
+- Create new tasks with titles, notes, and due dates
+- Edit tasks and move them between lists
 - Mark tasks as complete/incomplete
-- Clean, modern interface
+- Clean, modern interface with material icons
 - Secure Google OAuth2 authentication
+- Drag and drop list reordering
+- Immediate UI feedback for all actions
+- Reliable task operations with proper error handling
+- Smooth animations and transitions
 
 ## Branch Structure
 
@@ -28,24 +35,46 @@ The repository has two main branches:
 
 ## Development Workflow
 
-1. **Making Changes**
-   - Work in the `master` branch
-   - Test thoroughly with the development extension ID
-   - Commit and push changes to `master`
+1. **Feature Development**
+   - Create a new feature branch from `master`:
+     ```bash
+     git checkout master
+     git pull
+     git checkout -b feature/your-feature-name
+     ```
+   - Make and test changes in your feature branch
+   - Commit and push changes regularly:
+     ```bash
+     git add .
+     git commit -m "Description of changes"
+     git push -u origin feature/your-feature-name
+     ```
 
-2. **Store Submission**
-   - Merge changes from `master` to `production`
+2. **Making Changes**
+   - Work in your feature branch
+   - Test thoroughly with the development extension ID
+   - Create a Pull Request when ready to merge into `master`
+
+3. **Store Submission**
+   - Merge tested features from `master` to `production`
    - Remove the manifest key if present
    - Create a new build in `builds/v1.0/`
    - Submit the new build to the store
 
-3. **Common Git Commands**
+4. **Common Git Commands**
    ```bash
-   # Switch to master for development
-   git checkout master
+   # Check current branch
+   git branch
 
-   # Create a new feature branch (optional)
-   git checkout -b feature-name
+   # Create and switch to feature branch
+   git checkout -b feature/your-feature-name
+
+   # Switch between branches
+   git checkout master
+   git checkout feature/your-feature-name
+
+   # Update your branch with latest changes
+   git pull origin master
 
    # Commit changes
    git add .

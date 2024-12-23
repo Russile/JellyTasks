@@ -72,6 +72,54 @@ const COLOR_PALETTE = [
     'custom'   // Custom color picker
 ];
 
+// Add this function to initialize drag and drop
+function initializeDragAndDrop() {
+    const listSelection = document.getElementById('listSelection');
+    let draggedItem = null;
+    
+    listSelection.addEventListener('dragstart', (e) => {
+        const listItem = e.target.closest('.list-item');
+        if (!listItem) return;
+        
+        draggedItem = listItem;
+        listItem.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+
+    listSelection.addEventListener('dragend', (e) => {
+        const listItem = e.target.closest('.list-item');
+        if (!listItem) return;
+        
+        listItem.classList.remove('dragging');
+        draggedItem = null;
+        
+        // Save the new order
+        saveListOrder();
+    });
+
+    listSelection.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const listItem = e.target.closest('.list-item');
+        if (!listItem || listItem === draggedItem) return;
+
+        const rect = listItem.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const height = rect.height;
+        
+        const nextElement = y > height / 2 ? listItem.nextElementSibling : listItem;
+        if (nextElement !== draggedItem && nextElement !== draggedItem?.nextElementSibling) {
+            listSelection.insertBefore(draggedItem, nextElement);
+        }
+    });
+}
+
+// Add this function to save list order
+async function saveListOrder() {
+    const listItems = document.querySelectorAll('.list-item');
+    const listOrder = Array.from(listItems).map(item => item.dataset.listId);
+    await chrome.storage.local.set({ listOrder });
+}
+
 // Add the delete list function at the top level of the script
 window.deleteList = async function(listId, listTitle) {
     if (!confirm(`Are you sure you want to delete "${listTitle}"? All tasks in this list will be deleted.`)) {
@@ -93,18 +141,27 @@ window.deleteList = async function(listId, listTitle) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        // Remove from selectedLists
+        // Remove from selectedLists and save immediately
         selectedLists = selectedLists.filter(id => id !== listId);
-        await saveSelectedLists();
+        await chrome.storage.local.set({ selectedLists });
 
-        // Refresh the lists display
-        await loadTaskListsForConfig();
-        
-        // If we deleted the current list, switch to the default list
-        if (currentTaskList === listId) {
-            currentTaskList = selectedLists[0];
-            await loadAllTasks();
+        // Remove from allLists
+        allLists = allLists.filter(list => list.id !== listId);
+
+        // Remove the list item from both settings menu and main screen UI
+        const settingsListItem = document.querySelector(`#listSelection [data-list-id="${listId}"]`);
+        if (settingsListItem) {
+            settingsListItem.remove();
         }
+
+        // Also remove from main screen
+        const mainScreenListItem = document.querySelector(`.task-list-section [data-list-id="${listId}"]`);
+        if (mainScreenListItem) {
+            mainScreenListItem.closest('.task-list-section').remove();
+        }
+
+        // Refresh the main screen
+        await loadAllTasks();
     } catch (error) {
         console.error('Error deleting list:', error);
         alert('Failed to delete list. Please try again.');
@@ -196,6 +253,8 @@ async function initializeExtension() {
             if (accessToken) {
                 chrome.identity.removeCachedAuthToken({ 'token': accessToken });
             }
+        } else {
+            await chrome.storage.local.remove(['accessToken']);
         }
         accessToken = null;
         loginPrompt.style.display = 'flex';
@@ -257,58 +316,101 @@ function initializeDOMElements() {
 function initializeEventListeners() {
     console.log('Initializing event listeners');
 
+    // Remove any existing event listeners by cloning and replacing elements
+    const elements = {
+        loginButton: document.getElementById('loginButton'),
+        configButton: document.getElementById('configButton'),
+        closeConfigButton: document.getElementById('closeConfig'),
+        selectAllButton: document.getElementById('selectAllLists'),
+        saveConfigButton: document.getElementById('saveConfig'),
+        addTaskButton: document.getElementById('addTask'),
+        cancelTaskButton: document.getElementById('cancelTask'),
+        cancelEditButton: document.getElementById('cancelEdit'),
+        updateTaskButton: document.getElementById('updateTask'),
+        clearCompletedButton: document.getElementById('clearCompleted'),
+        saveTaskButton: document.getElementById('saveTask'),
+        addListButton: document.getElementById('addListButton'),
+        cancelNewList: document.getElementById('cancelNewList'),
+        saveNewList: document.getElementById('saveNewList'),
+        deleteTaskButton: document.querySelector('.delete-task-button')
+    };
+
+    // Clone and replace each element to remove existing event listeners
+    Object.entries(elements).forEach(([key, element]) => {
+        if (element) {
+            const clone = element.cloneNode(true);
+            element.parentNode.replaceChild(clone, element);
+            elements[key] = clone;
+        }
+    });
+
     // Login button click handler
-    document.getElementById('loginButton')?.addEventListener('click', handleLogin);
+    elements.loginButton?.addEventListener('click', handleLogin);
 
     // Config menu event listeners
-    configButton?.addEventListener('click', () => {
+    elements.configButton?.addEventListener('click', () => {
         configMenu.classList.remove('hidden');
         loadTaskListsForConfig();
     });
 
-    closeConfigButton?.addEventListener('click', () => {
+    elements.closeConfigButton?.addEventListener('click', () => {
         configMenu.classList.add('hidden');
     });
 
-    selectAllButton?.addEventListener('click', handleSelectAll);
+    elements.selectAllButton?.addEventListener('click', handleSelectAll);
 
-    saveConfigButton?.addEventListener('click', async () => {
-        const checkboxes = listSelection.querySelectorAll('input[type="checkbox"]');
-        selectedLists = Array.from(checkboxes)
-            .filter(cb => cb.checked)
-            .map(cb => cb.value);
-        
-        await saveSelectedLists();
-        configMenu.classList.add('hidden');
-        await loadAllTasks();
+    elements.saveConfigButton?.addEventListener('click', async () => {
+        try {
+            // Save the list order
+            const listItems = document.querySelectorAll('.list-item');
+            const listOrder = Array.from(listItems).map(item => item.dataset.listId);
+            await chrome.storage.local.set({ listOrder });
+
+            // Save selected lists
+            const checkboxes = listSelection.querySelectorAll('input[type="checkbox"]');
+            selectedLists = Array.from(checkboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.closest('.list-item').dataset.listId);
+            
+            await chrome.storage.local.set({ selectedLists });
+            
+            // Hide the config menu
+            configMenu.classList.add('hidden');
+            
+            // Refresh the main task list display
+            await loadAllTasks();
+        } catch (error) {
+            console.error('Error saving configuration:', error);
+        }
     });
 
     // Task form event listeners
-    addTaskButton?.addEventListener('click', async () => {
+    elements.addTaskButton?.addEventListener('click', async () => {
         newTaskForm.classList.remove('hidden');
-        await populateListSelector();
+        await populateListSelector(taskListSelect);
         newTaskTitle.focus();
     });
 
-    cancelTaskButton?.addEventListener('click', () => {
+    elements.cancelTaskButton?.addEventListener('click', () => {
         newTaskForm.classList.add('hidden');
         clearNewTaskForm();
     });
 
     // Edit form event listeners
-    cancelEditButton?.addEventListener('click', () => {
+    elements.cancelEditButton?.addEventListener('click', () => {
         editTaskForm.classList.add('hidden');
         currentEditingTaskId = null;
         currentTaskList = selectedLists[0];
     });
 
-    updateTaskButton?.addEventListener('click', async () => {
+    // Single updateTaskButton event listener
+    elements.updateTaskButton?.addEventListener('click', async () => {
         if (!currentEditingTaskId) return;
         
         const taskElement = document.querySelector(`[data-task-id="${currentEditingTaskId}"]`);
         if (!taskElement) return;
         
-        const listId = taskElement.dataset.listId;
+        const sourceListId = taskElement.dataset.listId;
         const title = editTaskTitle.value.trim();
         if (!title) return;
 
@@ -319,21 +421,7 @@ function initializeEventListeners() {
                 due: editTaskDate.value ? new Date(editTaskDate.value).toISOString() : null
             };
 
-            const response = await fetch(
-                `https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks/${currentEditingTaskId}`,
-                {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(taskData),
-                }
-            );
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            await updateTask(currentEditingTaskId, taskData, sourceListId);
 
             // Hide the edit form
             editTaskForm.classList.add('hidden');
@@ -348,7 +436,7 @@ function initializeEventListeners() {
     });
 
     // Clear completed button
-    clearCompletedButton?.addEventListener('click', async () => {
+    elements.clearCompletedButton?.addEventListener('click', async () => {
         try {
             // Clear completed tasks from all selected lists
             for (const listId of selectedLists) {
@@ -375,12 +463,12 @@ function initializeEventListeners() {
     });
 
     // Save task button
-    saveTaskButton?.addEventListener('click', async () => {
+    elements.saveTaskButton?.addEventListener('click', async () => {
         const title = newTaskTitle.value.trim();
-        if (!title || saveTaskButton.disabled) return;
+        if (!title || elements.saveTaskButton.disabled) return;
 
         try {
-            saveTaskButton.disabled = true;
+            elements.saveTaskButton.disabled = true;
             const selectedListId = taskListSelect.value;
             const date = newTaskDate.value;
             let dueDate = null;
@@ -415,27 +503,27 @@ function initializeEventListeners() {
         } catch (error) {
             console.error('Error creating task:', error);
         } finally {
-            saveTaskButton.disabled = false;
+            elements.saveTaskButton.disabled = false;
         }
     });
 
     // New list form event listeners
-    addListButton?.addEventListener('click', () => {
+    elements.addListButton?.addEventListener('click', () => {
         newListForm.classList.remove('hidden');
         newListTitle.focus();
     });
 
-    cancelNewList?.addEventListener('click', () => {
+    elements.cancelNewList?.addEventListener('click', () => {
         newListForm.classList.add('hidden');
         newListTitle.value = '';
     });
 
-    saveNewList?.addEventListener('click', async () => {
+    elements.saveNewList?.addEventListener('click', async () => {
         const title = newListTitle.value.trim();
-        if (!title || saveNewList.disabled) return;
+        if (!title || elements.saveNewList.disabled) return;
 
         try {
-            saveNewList.disabled = true;
+            elements.saveNewList.disabled = true;
             const response = await fetch(
                 'https://tasks.googleapis.com/tasks/v1/users/@me/lists',
                 {
@@ -454,201 +542,224 @@ function initializeEventListeners() {
 
             const newList = await response.json();
             
-            // Only add to selectedLists if it's not already there
+            // Add to allLists
+            allLists.push(newList);
+            
+            // Add to selectedLists if not already there
             if (!selectedLists.includes(newList.id)) {
                 selectedLists.push(newList.id);
-                await saveSelectedLists();
+                await chrome.storage.local.set({ selectedLists });
             }
 
-            // Clear and hide the form
+            // Clear and hide the new list form
             newListTitle.value = '';
             newListForm.classList.add('hidden');
 
             // Refresh the lists display
             await loadTaskListsForConfig();
+            
+            // Refresh the main screen
+            await loadAllTasks();
         } catch (error) {
             console.error('Error creating new list:', error);
+            alert('Failed to create list. Please try again.');
         } finally {
-            saveNewList.disabled = false;
+            elements.saveNewList.disabled = false;
         }
     });
 
-    // Add delete task button handler
-    const deleteTaskButton = document.querySelector('.delete-task-button');
-    if (deleteTaskButton) {
-        // Remove any existing event listeners
-        deleteTaskButton.replaceWith(deleteTaskButton.cloneNode(true));
-        const newDeleteTaskButton = document.querySelector('.delete-task-button');
-        
-        newDeleteTaskButton.addEventListener('click', () => {
-            if (currentEditingTaskId && currentTaskList) {
-                const taskElement = document.querySelector(`[data-task-id="${currentEditingTaskId}"]`);
-                const taskTitle = taskElement ? taskElement.querySelector('.task-content').textContent : 'this task';
-                deleteTask(currentEditingTaskId, currentTaskList, taskTitle);
-            }
-        });
-    }
+    // Delete task button handler
+    elements.deleteTaskButton?.addEventListener('click', () => {
+        if (currentEditingTaskId && currentTaskList) {
+            const taskElement = document.querySelector(`[data-task-id="${currentEditingTaskId}"]`);
+            const taskTitle = taskElement ? taskElement.querySelector('.task-content').textContent : 'this task';
+            deleteTask(currentEditingTaskId, currentTaskList, taskTitle);
+        }
+    });
 }
 
 // Load task lists for config menu
 async function loadTaskListsForConfig() {
     try {
-        if (!listSelection) return;
-        listSelection.innerHTML = '';
-
         const response = await fetch(
             'https://tasks.googleapis.com/tasks/v1/users/@me/lists',
             {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`,
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0'
                 },
             }
         );
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error('Failed to load task lists');
         }
 
         const data = await response.json();
-        
-        // Create a Map to store unique lists
-        const seenIds = new Set();
-        const seenTitles = new Set();
-        const uniqueLists = (data.items || []).filter(list => {
-            if (seenIds.has(list.id) || seenTitles.has(list.title)) {
-                return false;
-            }
-            seenIds.add(list.id);
-            seenTitles.add(list.title);
-            return true;
-        });
-        
-        // Sort lists alphabetically
-        allLists = uniqueLists.sort((a, b) => a.title.localeCompare(b.title));
+        allLists = data.items || [];
 
-        // Clear existing selection and rebuild
-        listSelection.innerHTML = '';
+        // Load saved order and selections
+        const storage = await chrome.storage.local.get(['listOrder', 'selectedLists', 'listColors']);
+        const listOrder = storage.listOrder || [];
+        selectedLists = storage.selectedLists || [];
+        listColors = storage.listColors || {};
         
-        // Create a temporary copy of selectedLists for the config menu
-        let tempSelectedLists = [...selectedLists];
+        // Sort lists according to saved order
+        if (listOrder.length > 0) {
+            allLists.sort((a, b) => {
+                const indexA = listOrder.indexOf(a.id);
+                const indexB = listOrder.indexOf(b.id);
+                return (indexA === -1 ? Infinity : indexA) - (indexB === -1 ? Infinity : indexB);
+            });
+        }
+
+        const listSelection = document.getElementById('listSelection');
+        listSelection.innerHTML = '';
 
         allLists.forEach(list => {
             const listItem = document.createElement('div');
             listItem.className = 'list-item';
+            listItem.draggable = true;
             listItem.dataset.listId = list.id;
 
-            const leftDiv = document.createElement('div');
-            leftDiv.className = 'list-item-left';
-            
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = `list-${list.id}`;
-            checkbox.value = list.id;
-            checkbox.checked = tempSelectedLists.includes(list.id);
-            
-            checkbox.addEventListener('change', () => {
-                if (checkbox.checked) {
-                    if (!tempSelectedLists.includes(list.id)) {
-                        tempSelectedLists.push(list.id);
-                    }
-                } else {
-                    tempSelectedLists = tempSelectedLists.filter(id => id !== list.id);
-                }
-                updateSelectAllButtonState();
-            });
+            const listItemLeft = document.createElement('div');
+            listItemLeft.className = 'list-item-left';
 
-            const label = document.createElement('label');
-            label.htmlFor = `list-${list.id}`;
-            label.textContent = list.title;
+            // Add drag handle with SVG
+            const dragHandle = document.createElement('div');
+            dragHandle.className = 'list-item-handle';
+            dragHandle.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M4 6h8v1H4zm0 3h8v1H4z"/>
+                </svg>
+            `;
+            listItemLeft.appendChild(dragHandle);
 
-            // Add color picker button
+            // Add color button
             const colorButton = document.createElement('button');
             colorButton.className = 'color-picker-button';
             colorButton.style.backgroundColor = listColors[list.id] || '#1a73e8';
             colorButton.onclick = () => openColorPicker(list.id, listColors[list.id]);
+            listItemLeft.appendChild(colorButton);
 
-            leftDiv.appendChild(checkbox);
-            leftDiv.appendChild(colorButton);
-            leftDiv.appendChild(label);
-            listItem.appendChild(leftDiv);
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = selectedLists.includes(list.id);
+            checkbox.addEventListener('change', async () => {
+                if (checkbox.checked) {
+                    if (!selectedLists.includes(list.id)) {
+                        selectedLists.push(list.id);
+                    }
+                } else {
+                    selectedLists = selectedLists.filter(id => id !== list.id);
+                }
+                await chrome.storage.local.set({ selectedLists });
+            });
+            listItemLeft.appendChild(checkbox);
 
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'list-item-actions';
+            const title = document.createElement('span');
+            title.textContent = list.title;
+            title.addEventListener('dblclick', () => editListName(list.id, list.title));
+            listItemLeft.appendChild(title);
 
+            listItem.appendChild(listItemLeft);
+
+            const listItemActions = document.createElement('div');
+            listItemActions.className = 'list-item-actions';
+
+            // Add edit button
             const editButton = document.createElement('button');
             editButton.className = 'edit-list-button';
-            editButton.textContent = 'Edit';
-            editButton.onclick = async () => {
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.value = list.title;
-                label.replaceWith(input);
-                input.focus();
+            const editIcon = document.createElement('i');
+            editIcon.className = 'material-icons';
+            editIcon.textContent = 'edit';
+            editButton.appendChild(editIcon);
+            editButton.title = 'Edit';
+            editButton.onclick = () => {
+                const titleSpan = listItem.querySelector('span');
+                if (titleSpan) {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'list-name-input';
+                    input.value = titleSpan.textContent;
+                    titleSpan.replaceWith(input);
+                    input.focus();
+                    input.select();
 
-                const handleSave = async () => {
-                    const newTitle = input.value.trim();
-                    if (newTitle && newTitle !== list.title) {
-                        try {
-                            const response = await fetch(
-                                `https://tasks.googleapis.com/tasks/v1/users/@me/lists/${list.id}`,
-                                {
-                                    method: 'PATCH',
-                                    headers: {
-                                        'Authorization': `Bearer ${accessToken}`,
-                                        'Content-Type': 'application/json',
-                                    },
-                                    body: JSON.stringify({ title: newTitle }),
+                    const saveEdit = async () => {
+                        const newTitle = input.value.trim();
+                        if (newTitle && newTitle !== list.title) {
+                            try {
+                                const response = await fetch(
+                                    `https://tasks.googleapis.com/tasks/v1/users/@me/lists/${list.id}`,
+                                    {
+                                        method: 'PATCH',
+                                        headers: {
+                                            'Authorization': `Bearer ${accessToken}`,
+                                            'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify({ title: newTitle }),
+                                    }
+                                );
+
+                                if (!response.ok) {
+                                    throw new Error('Failed to update list name');
                                 }
-                            );
 
-                            if (response.ok) {
-                                list.title = newTitle;
-                                label.textContent = newTitle;
-                                await loadAllTasks();
+                                const newSpan = document.createElement('span');
+                                newSpan.textContent = newTitle;
+                                newSpan.addEventListener('dblclick', () => editListName(list.id, newTitle));
+                                input.replaceWith(newSpan);
+                            } catch (error) {
+                                console.error('Error updating list name:', error);
+                                const revertSpan = document.createElement('span');
+                                revertSpan.textContent = list.title;
+                                revertSpan.addEventListener('dblclick', () => editListName(list.id, list.title));
+                                input.replaceWith(revertSpan);
                             }
-                        } catch (error) {
-                            console.error('Error updating list title:', error);
+                        } else {
+                            const revertSpan = document.createElement('span');
+                            revertSpan.textContent = list.title;
+                            revertSpan.addEventListener('dblclick', () => editListName(list.id, list.title));
+                            input.replaceWith(revertSpan);
                         }
-                    }
-                    input.replaceWith(label);
-                };
+                    };
 
-                input.onblur = handleSave;
-                input.onkeydown = (e) => {
-                    if (e.key === 'Enter') {
-                        handleSave();
-                    } else if (e.key === 'Escape') {
-                        input.replaceWith(label);
-                    }
-                };
+                    input.addEventListener('keydown', async (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            await saveEdit();
+                        } else if (e.key === 'Escape') {
+                            const revertSpan = document.createElement('span');
+                            revertSpan.textContent = list.title;
+                            revertSpan.addEventListener('dblclick', () => editListName(list.id, list.title));
+                            input.replaceWith(revertSpan);
+                        }
+                    });
+
+                    input.addEventListener('blur', saveEdit);
+                }
             };
+            listItemActions.appendChild(editButton);
 
+            // Add delete button
             const deleteButton = document.createElement('button');
             deleteButton.className = 'delete-list-button';
-            deleteButton.innerHTML = '&times;';
-            deleteButton.title = 'Delete list';
+            const deleteIcon = document.createElement('i');
+            deleteIcon.className = 'material-icons';
+            deleteIcon.textContent = 'close';
+            deleteButton.appendChild(deleteIcon);
+            deleteButton.title = 'Delete';
             deleteButton.onclick = () => deleteList(list.id, list.title);
+            listItemActions.appendChild(deleteButton);
 
-            actionsDiv.appendChild(editButton);
-            actionsDiv.appendChild(deleteButton);
-            listItem.appendChild(actionsDiv);
+            listItem.appendChild(listItemActions);
             listSelection.appendChild(listItem);
         });
 
-        // Update the Save button handler to use tempSelectedLists
-        saveConfigButton.onclick = async () => {
-            selectedLists = [...tempSelectedLists];
-            await saveSelectedLists();
-            configMenu.classList.add('hidden');
-            await loadAllTasks();
-        };
-
-        updateSelectAllButtonState();
+        // Initialize drag and drop after creating list items
+        initializeDragAndDrop();
     } catch (error) {
-        console.error('Error loading task lists for config:', error);
+        console.error('Error loading task lists:', error);
     }
 }
 
@@ -878,6 +989,11 @@ async function loadAllTasks() {
         const tempContainer = document.createElement('div');
         tempContainer.className = 'tasks';
 
+        // Get saved list order and selected lists
+        const storage = await chrome.storage.local.get(['listOrder', 'selectedLists']);
+        const listOrder = storage.listOrder || [];
+        selectedLists = storage.selectedLists || [];
+
         if (!selectedLists || selectedLists.length === 0) {
             const noListsMessage = document.createElement('div');
             noListsMessage.className = 'no-lists-message';
@@ -887,6 +1003,13 @@ async function loadAllTasks() {
             tasksContainer.appendChild(tempContainer);
             return;
         }
+
+        // Sort selectedLists according to listOrder
+        selectedLists.sort((a, b) => {
+            const indexA = listOrder.indexOf(a);
+            const indexB = listOrder.indexOf(b);
+            return (indexA === -1 ? Infinity : indexA) - (indexB === -1 ? Infinity : indexB);
+        });
 
         const listPromises = selectedLists.map(async listId => {
             try {
@@ -932,8 +1055,7 @@ async function loadAllTasks() {
         });
 
         const results = (await Promise.all(listPromises))
-            .filter(result => result !== null)
-            .sort((a, b) => a.listTitle.localeCompare(b.listTitle));
+            .filter(result => result !== null);
 
         if (results.length === 0) {
             const noTasksMessage = document.createElement('div');
@@ -944,6 +1066,13 @@ async function loadAllTasks() {
             tasksContainer.appendChild(tempContainer);
             return;
         }
+
+        // Sort results according to listOrder
+        results.sort((a, b) => {
+            const indexA = listOrder.indexOf(a.listId);
+            const indexB = listOrder.indexOf(b.listId);
+            return (indexA === -1 ? Infinity : indexA) - (indexB === -1 ? Infinity : indexB);
+        });
 
         results.forEach(({ listId, listTitle, tasks }) => {
             if (tasks && tasks.length > 0) {
@@ -1119,32 +1248,75 @@ function getTimeFromNotes(notes) {
     return match ? match[1] : null;
 }
 
-async function updateTask(taskId, updates) {
-    console.log('Updating task:', { taskId, updates });
+// Update task function to handle list changes
+async function updateTask(taskId, updates, sourceListId) {
+    console.log('Updating task:', { taskId, updates, sourceListId });
     
-    // If there's a due date, ensure it's in the correct format
-    if (updates.due && typeof updates.due === 'string') {
-        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const dateTimeStr = `${updates.due}`;
-        const date = new Date(dateTimeStr);
-        updates.due = date.toISOString();
-    }
-    
-    const response = await fetch(
-        `https://tasks.googleapis.com/tasks/v1/lists/${currentTaskList}/tasks/${taskId}`,
-        {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(updates),
+    try {
+        const targetListId = document.getElementById('editTaskList')?.value || sourceListId;
+        
+        // If the list hasn't changed, just update the task normally
+        if (targetListId === sourceListId) {
+            const response = await fetch(
+                `https://tasks.googleapis.com/tasks/v1/lists/${targetListId}/tasks/${taskId}`,
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updates),
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return response.json();
         }
-    );
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        
+        // If the list has changed, we need to:
+        // 1. Create new task in target list
+        // 2. Delete old task from source list
+        
+        // Create new task in target list
+        const createResponse = await fetch(
+            `https://tasks.googleapis.com/tasks/v1/lists/${targetListId}/tasks`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(updates),
+            }
+        );
+
+        if (!createResponse.ok) {
+            throw new Error('Failed to create task in new list');
+        }
+
+        // Delete from old list
+        const deleteResponse = await fetch(
+            `https://tasks.googleapis.com/tasks/v1/lists/${sourceListId}/tasks/${taskId}`,
+            {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+            }
+        );
+
+        if (!deleteResponse.ok) {
+            throw new Error('Failed to delete task from old list');
+        }
+
+        return createResponse.json();
+    } catch (error) {
+        console.error('Error updating task:', error);
+        throw error;
     }
-    return response.json();
 }
 
 // UI Functions
@@ -1254,501 +1426,34 @@ async function editTask(taskId) {
 }
 
 // Add function to populate list selector
-async function populateListSelector() {
-    if (!taskListSelect) return;
+async function populateListSelector(selectElement) {
+    if (!selectElement) return;
     
     try {
-        const response = await fetch(
-            'https://tasks.googleapis.com/tasks/v1/users/@me/lists',
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                },
-            }
-        );
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        if (data.items) {
-            taskListSelect.innerHTML = data.items
-                .filter(list => selectedLists.includes(list.id))
-                .map(list => `
-                    <option value="${list.id}">${list.title}</option>
-                `).join('');
-            
-            // Select the first list by default
-            if (taskListSelect.options.length > 0) {
-                taskListSelect.value = taskListSelect.options[0].value;
-            }
-        }
-    } catch (error) {
-        console.error('Error populating list selector:', error);
-    }
-}
+        // Get saved list order
+        const storage = await chrome.storage.local.get(['listOrder']);
+        const listOrder = storage.listOrder || [];
 
-// Sort tasks by completion status and due date
-function sortTasks(tasks) {
-    return tasks.sort((a, b) => {
-        // First sort by completion status
-        if (a.status === 'completed' && b.status !== 'completed') return 1;
-        if (a.status !== 'completed' && b.status === 'completed') return -1;
-        
-        // If both tasks have the same completion status, sort by due date
-        if (!a.due && !b.due) return 0;
-        if (!a.due) return 1;
-        if (!b.due) return -1;
-        return new Date(a.due) - new Date(b.due);
-    });
-}
-
-function createTaskElement(taskData) {
-    const task = taskData.task || taskData;
-    const listId = taskData.listId;
-    const listColor = listColors[listId] || '#1a73e8';
-
-    const taskElement = document.createElement('div');
-    taskElement.className = 'task-item';
-    if (task.status === 'completed') {
-        taskElement.classList.add('completed');
-    }
-    taskElement.dataset.taskId = task.id;
-    taskElement.dataset.listId = listId;
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = 'task-checkbox';
-    checkbox.checked = task.status === 'completed';
-    checkbox.style.color = listColor;
-    checkbox.addEventListener('change', () => handleTaskStatusChange(task.id, listId, checkbox.checked));
-
-    const mainContent = document.createElement('div');
-    mainContent.className = 'task-main-content';
-
-    const contentWrapper = document.createElement('div');
-    contentWrapper.className = 'task-content-wrapper';
-
-    const taskContent = document.createElement('div');
-    taskContent.className = 'task-content';
-    taskContent.textContent = task.title;
-
-    const actionsDiv = document.createElement('div');
-    actionsDiv.className = 'task-actions';
-
-    const editButton = document.createElement('button');
-    editButton.className = 'edit-task-button';
-    editButton.textContent = 'Edit';
-    editButton.onclick = (e) => {
-        e.stopPropagation();
-        loadTaskForEdit(task.id, listId);
-    };
-    actionsDiv.appendChild(editButton);
-
-    contentWrapper.appendChild(taskContent);
-    contentWrapper.appendChild(actionsDiv);
-    mainContent.appendChild(contentWrapper);
-
-    if (task.notes || task.due) {
-        if (task.notes) {
-            const notesElement = document.createElement('div');
-            notesElement.className = 'task-notes';
-            
-            // Check if notes contain URLs
-            const hasUrls = /(https?:\/\/[^\s]+)/.test(task.notes);
-            if (hasUrls) {
-                notesElement.classList.add('contains-url');
-                // Replace URLs with colored links, preserving line breaks
-                const notesText = task.notes.replace(/(https?:\/\/[^\s]+)/g, 
-                    (url) => `<a href="${url}" target="_blank" style="color: ${listColor}">${url}</a>`);
-                notesElement.innerHTML = notesText.replace(/\n/g, '<br>');
-            } else {
-                notesElement.textContent = task.notes;
-            }
-
-            // Check if content needs fade effect (more than 3 lines)
-            requestAnimationFrame(() => {
-                const lineHeight = parseInt(window.getComputedStyle(notesElement).lineHeight);
-                const maxHeight = lineHeight * 3;
-                if (notesElement.scrollHeight > maxHeight) {
-                    notesElement.classList.add('has-overflow');
-                }
-            });
-
-            // Add click handler for expansion
-            notesElement.addEventListener('click', (e) => {
-                if (e.target.tagName !== 'A') {  // Don't expand when clicking links
-                    notesElement.classList.toggle('expanded');
-                }
-            });
-            
-            mainContent.appendChild(notesElement);
-        }
-
-        if (task.due) {
-            const dueDate = document.createElement('div');
-            dueDate.className = 'task-date';
-            dueDate.textContent = formatDateTime(task.due);
-            dueDate.style.color = listColor;
-            mainContent.appendChild(dueDate);
-        }
-    }
-
-    taskElement.appendChild(checkbox);
-    taskElement.appendChild(mainContent);
-
-    return taskElement;
-}
-
-function createListElement(list, checked = false) {
-  const listItem = document.createElement('div');
-  listItem.className = 'list-item';
-  listItem.dataset.listId = list.id;
-
-  const leftSection = document.createElement('div');
-  leftSection.className = 'list-item-left';
-
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.checked = checked;
-  checkbox.className = 'list-checkbox';
-
-  const listTitle = document.createElement('span');
-  listTitle.textContent = list.title;
-
-  leftSection.appendChild(checkbox);
-  leftSection.appendChild(listTitle);
-
-  const deleteButton = document.createElement('button');
-  deleteButton.textContent = '×';
-  deleteButton.className = 'delete-button';
-  deleteButton.title = 'Delete list';
-  deleteButton.onclick = async (e) => {
-    e.stopPropagation();
-    if (confirm('Are you sure you want to delete this list? All tasks in this list will be deleted.')) {
-      try {
-        await gapi.client.tasks.tasklists.delete({
-          tasklist: list.id
+        // Sort allLists according to saved order
+        const sortedLists = [...allLists].sort((a, b) => {
+            const indexA = listOrder.indexOf(a.id);
+            const indexB = listOrder.indexOf(b.id);
+            return (indexA === -1 ? Infinity : indexA) - (indexB === -1 ? Infinity : indexB);
         });
-        listItem.remove();
+
+        // Filter to only show selected lists
+        const listsToShow = sortedLists.filter(list => selectedLists.includes(list.id));
+        
+        selectElement.innerHTML = listsToShow
+            .map(list => `<option value="${list.id}">${list.title}</option>`)
+            .join('');
+        
+        // Select the first list by default if none is selected
+        if (selectElement.options.length > 0 && !selectElement.value) {
+            selectElement.value = selectElement.options[0].value;
+        }
       } catch (error) {
-        console.error('Error deleting list:', error);
-      }
-    }
-  };
-
-  listItem.appendChild(leftSection);
-  listItem.appendChild(deleteButton);
-
-  return listItem;
-}
-
-// Logout handling
-document.getElementById('logoutButton')?.addEventListener('click', async () => {
-    if (confirm('Are you sure you want to sign out?')) {
-        try {
-            if (isEdge) {
-                // For Edge, clear stored token
-                await chrome.storage.local.remove(['accessToken']);
-                if (accessToken) {
-                    // Revoke the token
-                    await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${accessToken}`, {
-                        method: 'GET'
-                    });
-                }
-            } else {
-                // For Chrome, we need to be more thorough
-                // First clear all storage
-                await chrome.storage.local.clear();
-
-                // Remove the current token if we have it
-                if (accessToken) {
-                    await new Promise((resolve) => {
-                        chrome.identity.removeCachedAuthToken({ 'token': accessToken }, resolve);
-                    });
-                }
-
-                // Get and remove any other tokens that might exist
-                await new Promise((resolve) => {
-                    chrome.identity.getAuthToken({ 'interactive': false }, async function(token) {
-                        if (token) {
-                            // Remove this token
-                            await new Promise(resolve2 => {
-                                chrome.identity.removeCachedAuthToken({ 'token': token }, resolve2);
-                            });
-                            // Also revoke it from Google
-                            await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`, {
-                                method: 'GET'
-                            });
-                        }
-                        resolve();
-                    });
-                });
-            }
-            
-            // Reset all state variables
-            accessToken = null;
-            selectedLists = [];
-            allLists = [];
-            currentTaskList = null;
-            
-            // Clear the tasks container
-            const tasksContainer = document.getElementById('tasks');
-            if (tasksContainer) {
-                tasksContainer.innerHTML = '';
-            }
-
-            // Reset UI state
-            document.querySelector('.container').classList.add('hidden');
-            loginPrompt.style.display = 'flex';
-            
-            // Hide any open modals
-            document.querySelectorAll('.modal-overlay').forEach(modal => {
-                if (modal.id !== 'loginPrompt') {
-                    modal.classList.add('hidden');
-                }
-            });
-
-            // For Chrome, do one final check and cleanup after a short delay
-            if (!isEdge) {
-                setTimeout(async () => {
-                    try {
-                        await new Promise((resolve) => {
-                            chrome.identity.getAuthToken({ 'interactive': false }, function(token) {
-                                if (token) {
-                                    chrome.identity.removeCachedAuthToken({ 'token': token }, resolve);
-                                } else {
-                                    resolve();
-                                }
-                            });
-                        });
-                    } catch (error) {
-                        console.error('Final cleanup error:', error);
-                    }
-                }, 500);
-            }
-            
-        } catch (error) {
-            console.error('Error during sign out:', error);
-            // Even if there's an error, try to reset the UI state
-            document.querySelector('.container').classList.add('hidden');
-            loginPrompt.style.display = 'flex';
-        }
-    }
-});
-
-// Load selected lists from storage
-async function loadSelectedLists() {
-    try {
-        const response = await fetch(
-            'https://tasks.googleapis.com/tasks/v1/users/@me/lists',
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                },
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        allLists = data.items || [];
-
-        // Load previously selected lists from storage
-        const storage = await chrome.storage.local.get(['selectedLists']);
-        
-        // If no lists are selected or after fresh login, select all lists
-        if (!storage.selectedLists || storage.selectedLists.length === 0) {
-            selectedLists = allLists.map(list => list.id);
-            // Save the selection
-            await chrome.storage.local.set({ selectedLists });
-        } else {
-            // Filter out any lists that no longer exist
-            selectedLists = storage.selectedLists.filter(id => 
-                allLists.some(list => list.id === id)
-            );
-            // If all selected lists were deleted, select all available lists
-            if (selectedLists.length === 0) {
-                selectedLists = allLists.map(list => list.id);
-                await chrome.storage.local.set({ selectedLists });
-            }
-        }
-
-        return selectedLists;
-    } catch (error) {
-        console.error('Error in loadSelectedLists:', error);
-        return [];
-    }
-}
-
-// Save selected lists to storage
-async function saveSelectedLists() {
-    try {
-        await chrome.storage.local.set({ 
-            selectedLists,
-            currentTaskList: selectedLists.length > 0 ? selectedLists[0] : null
-        });
-        console.log('Saved selected lists:', selectedLists);
-    } catch (error) {
-        console.error('Error saving selected lists:', error);
-    }
-}
-
-// Fix the edit task functionality
-async function handleEditTask(taskId, listId) {
-    try {
-        currentEditingTaskId = taskId;
-        currentTaskList = listId;
-        
-        const response = await fetch(
-            `https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks/${taskId}?timestamp=${Date.now()}`,
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0'
-                },
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const task = await response.json();
-        
-        editTaskTitle.value = task.title || '';
-        editTaskNotes.value = task.notes || '';
-        if (task.due) {
-            const dueDate = new Date(task.due);
-            editTaskDate.value = dueDate.toISOString().split('T')[0];
-        } else {
-            editTaskDate.value = '';
-        }
-        
-        // Show the edit form
-        editTaskForm.classList.remove('hidden');
-        
-        // Re-initialize event listeners to ensure clean state
-        initializeEventListeners();
-    } catch (error) {
-        console.error('Error loading task for edit:', error);
-        alert('Failed to load task for editing. Please try again.');
-    }
-}
-
-// Add cancel edit button handler
-document.getElementById('cancelEdit')?.addEventListener('click', () => {
-    editTaskForm.classList.add('hidden');
-    currentEditingTaskId = null;
-});
-
-async function loadInitialLists() {
-    try {
-        const response = await fetch(
-            'https://tasks.googleapis.com/tasks/v1/users/@me/lists',
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                },
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        // Ensure uniqueness in allLists
-        const seenIds = new Set();
-        allLists = (data.items || []).filter(list => {
-            if (seenIds.has(list.id)) {
-                return false;
-            }
-            seenIds.add(list.id);
-            return true;
-        });
-
-        // Load previously selected lists from storage
-        const storage = await chrome.storage.local.get(['selectedLists', 'currentTaskList']);
-        
-        if (!storage.selectedLists || storage.selectedLists.length === 0) {
-            // For first login, only select the first list by default
-            selectedLists = allLists.length > 0 ? [allLists[0].id] : [];
-            currentTaskList = allLists[0]?.id || '@default';
-            
-            await chrome.storage.local.set({
-                selectedLists,
-                currentTaskList
-            });
-        } else {
-            // Filter out any duplicate IDs from stored selectedLists
-            selectedLists = [...new Set(storage.selectedLists)];
-            // Ensure all selectedLists actually exist in allLists
-            selectedLists = selectedLists.filter(id => allLists.some(list => list.id === id));
-            // If no valid lists remain, select the first list
-            if (selectedLists.length === 0 && allLists.length > 0) {
-                selectedLists = [allLists[0].id];
-            }
-            currentTaskList = storage.currentTaskList || selectedLists[0] || '@default';
-        }
-
-        await loadAllTasks();
-        await loadTaskListsForConfig();
-        
-    } catch (error) {
-        console.error('Error loading initial lists:', error);
-    }
-}
-
-async function deleteTask(taskId, listId, taskTitle) {
-    if (!confirm(`Are you sure you want to delete "${taskTitle}"?`)) {
-        return;
-    }
-
-    try {
-        const response = await fetch(
-            `https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks/${taskId}`,
-            {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                },
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        // Close the edit form
-        editTaskForm.classList.add('hidden');
-        
-        // Remove the task element with animation
-        const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
-        if (taskElement) {
-            taskElement.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-            taskElement.style.opacity = '0';
-            taskElement.style.transform = 'translateX(-20px)';
-            setTimeout(() => {
-                taskElement.remove();
-                // If this was the last task in the list, refresh to show "No tasks" message
-                const listContent = document.querySelector('.task-list-content');
-                if (listContent && !listContent.children.length) {
-                    loadAllTasks();
-                }
-            }, 300);
-        }
-    } catch (error) {
-        console.error('Error deleting task:', error);
-        alert('Failed to delete task. Please try again.');
+        console.error('Error populating list selector:', error);
     }
 }
 
@@ -1864,6 +1569,7 @@ async function loadTaskForEdit(taskId, listId) {
         const task = await response.json();
         
         currentEditingTaskId = taskId;
+        currentTaskList = listId;
         editTaskTitle.value = task.title || '';
         editTaskNotes.value = task.notes || '';
         
@@ -1882,12 +1588,319 @@ async function loadTaskForEdit(taskId, listId) {
         } else {
             editTaskDate.value = '';
         }
+
+        // Populate and set the list selector
+        const editTaskList = document.getElementById('editTaskList');
+        if (editTaskList) {
+            await populateListSelector(editTaskList);
+            editTaskList.value = listId;
+        }
         
         editTaskForm.classList.remove('hidden');
     } catch (error) {
         console.error('Error loading task for edit:', error);
     }
 }
+
+// Add this function to handle list name editing
+async function editListName(listId, currentTitle) {
+    const listItem = document.querySelector(`[data-list-id="${listId}"]`);
+    if (!listItem) return;
+
+    const titleSpan = listItem.querySelector('span');
+    if (!titleSpan) return;
+
+    // Create input element
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'list-name-input';
+    input.value = currentTitle;
+    
+    // Replace span with input
+    titleSpan.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const saveEdit = async () => {
+        try {
+            const newTitle = input.value.trim();
+            if (newTitle && newTitle !== currentTitle) {
+                const response = await fetch(
+                    `https://tasks.googleapis.com/tasks/v1/users/@me/lists/${listId}`,
+                    {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ title: newTitle }),
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error('Failed to update list name');
+                }
+
+                // Update the title span
+                const newSpan = document.createElement('span');
+                newSpan.textContent = newTitle;
+                newSpan.addEventListener('dblclick', () => editListName(listId, newTitle));
+                input.replaceWith(newSpan);
+            } else {
+                // If no changes, revert back to span
+                const revertSpan = document.createElement('span');
+                revertSpan.textContent = currentTitle;
+                revertSpan.addEventListener('dblclick', () => editListName(listId, currentTitle));
+                input.replaceWith(revertSpan);
+            }
+        } catch (error) {
+            console.error('Error updating list name:', error);
+            // Revert back to original title on error
+            const revertSpan = document.createElement('span');
+            revertSpan.textContent = currentTitle;
+            revertSpan.addEventListener('dblclick', () => editListName(listId, currentTitle));
+            input.replaceWith(revertSpan);
+        }
+    };
+
+    // Handle save on Enter and cancel on Escape
+    input.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            await saveEdit();
+        } else if (e.key === 'Escape') {
+            const revertSpan = document.createElement('span');
+            revertSpan.textContent = currentTitle;
+            revertSpan.addEventListener('dblclick', () => editListName(listId, currentTitle));
+            input.replaceWith(revertSpan);
+        }
+    });
+}
+
+// Load selected lists from storage
+async function loadSelectedLists() {
+    try {
+        const response = await fetch(
+            'https://tasks.googleapis.com/tasks/v1/users/@me/lists',
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                },
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        allLists = data.items || [];
+
+        // Load previously selected lists from storage
+        const storage = await chrome.storage.local.get(['selectedLists', 'currentTaskList']);
+        
+        // If no lists are selected or after fresh login, select all lists
+        if (!storage.selectedLists || storage.selectedLists.length === 0) {
+            selectedLists = allLists.map(list => list.id);
+            // Save the selection
+            await chrome.storage.local.set({ selectedLists });
+        } else {
+            // Filter out any lists that no longer exist
+            selectedLists = storage.selectedLists.filter(id => 
+                allLists.some(list => list.id === id)
+            );
+            // If all selected lists were deleted, select all available lists
+            if (selectedLists.length === 0) {
+                selectedLists = allLists.map(list => list.id);
+                await chrome.storage.local.set({ selectedLists });
+            }
+        }
+
+        return selectedLists;
+    } catch (error) {
+        console.error('Error in loadSelectedLists:', error);
+        return [];
+    }
+}
+
+function createTaskElement(taskData) {
+    const task = taskData.task || taskData;
+    const listId = taskData.listId;
+    const listColor = listColors[listId] || '#1a73e8';
+
+    const taskElement = document.createElement('div');
+    taskElement.className = 'task-item';
+    if (task.status === 'completed') {
+        taskElement.classList.add('completed');
+    }
+    taskElement.dataset.taskId = task.id;
+    taskElement.dataset.listId = listId;
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'task-checkbox';
+    checkbox.checked = task.status === 'completed';
+    checkbox.style.color = listColor;
+    checkbox.addEventListener('change', () => handleTaskStatusChange(task.id, listId, checkbox.checked));
+
+    const mainContent = document.createElement('div');
+    mainContent.className = 'task-main-content';
+
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'task-content-wrapper';
+
+    const taskContent = document.createElement('div');
+    taskContent.className = 'task-content';
+    taskContent.textContent = task.title;
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'task-actions';
+
+    const editButton = document.createElement('button');
+    editButton.className = 'edit-task-button';
+    const editIcon = document.createElement('i');
+    editIcon.className = 'material-icons';
+    editIcon.textContent = 'edit';
+    editButton.appendChild(editIcon);
+    editButton.title = 'Edit';
+    editButton.onclick = (e) => {
+        e.stopPropagation();
+        loadTaskForEdit(task.id, listId);
+    };
+    actionsDiv.appendChild(editButton);
+
+    contentWrapper.appendChild(taskContent);
+    contentWrapper.appendChild(actionsDiv);
+    mainContent.appendChild(contentWrapper);
+
+    if (task.notes || task.due) {
+        if (task.notes) {
+            const notesElement = document.createElement('div');
+            notesElement.className = 'task-notes';
+            
+            // Check if notes contain URLs
+            const hasUrls = /(https?:\/\/[^\s]+)/.test(task.notes);
+            if (hasUrls) {
+                notesElement.classList.add('contains-url');
+                // Replace URLs with colored links, preserving line breaks
+                const notesText = task.notes.replace(/(https?:\/\/[^\s]+)/g, 
+                    (url) => `<a href="${url}" target="_blank" style="color: ${listColor}">${url}</a>`);
+                notesElement.innerHTML = notesText.replace(/\n/g, '<br>');
+            } else {
+                notesElement.textContent = task.notes;
+            }
+
+            // Check if content needs fade effect (more than 3 lines)
+            requestAnimationFrame(() => {
+                const lineHeight = parseInt(window.getComputedStyle(notesElement).lineHeight);
+                const maxHeight = lineHeight * 3;
+                if (notesElement.scrollHeight > maxHeight) {
+                    notesElement.classList.add('has-overflow');
+                }
+            });
+
+            // Add click handler for expansion
+            notesElement.addEventListener('click', (e) => {
+                if (e.target.tagName !== 'A') {  // Don't expand when clicking links
+                    notesElement.classList.toggle('expanded');
+                }
+            });
+            
+            mainContent.appendChild(notesElement);
+        }
+
+        if (task.due) {
+            const dueDate = document.createElement('div');
+            dueDate.className = 'task-date';
+            dueDate.textContent = formatDateTime(task.due);
+            dueDate.style.color = listColor;
+            mainContent.appendChild(dueDate);
+        }
+    }
+
+    taskElement.appendChild(checkbox);
+    taskElement.appendChild(mainContent);
+
+    return taskElement;
+}
+
+// Sort tasks by completion status and due date
+function sortTasks(tasks) {
+    return tasks.sort((a, b) => {
+        // First sort by completion status
+        if (a.status === 'completed' && b.status !== 'completed') return 1;
+        if (a.status !== 'completed' && b.status === 'completed') return -1;
+        
+        // If both tasks have the same completion status, sort by due date
+        if (!a.due && !b.due) return 0;
+        if (!a.due) return 1;
+        if (!b.due) return -1;
+        return new Date(a.due) - new Date(b.due);
+    });
+}
+
+// Add the delete task function
+async function deleteTask(taskId, listId, taskTitle) {
+    if (!confirm(`Are you sure you want to delete "${taskTitle}"?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            `https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks/${taskId}`,
+            {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Hide the edit form
+        editTaskForm.classList.add('hidden');
+        currentEditingTaskId = null;
+
+        // Remove the task from UI
+        const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (taskElement) {
+            taskElement.remove();
+        }
+
+        // Refresh the tasks display
+        await loadAllTasks();
+    } catch (error) {
+        console.error('Error deleting task:', error);
+        alert('Failed to delete task. Please try again.');
+    }
+}
+
+// Update the event listener for the delete task button
+document.addEventListener('DOMContentLoaded', () => {
+    // Add delete task button handler
+    const deleteTaskButton = document.querySelector('.delete-task-button');
+    if (deleteTaskButton) {
+        // Remove any existing event listeners
+        deleteTaskButton.replaceWith(deleteTaskButton.cloneNode(true));
+        const newDeleteTaskButton = document.querySelector('.delete-task-button');
+        
+        newDeleteTaskButton.addEventListener('click', () => {
+            if (currentEditingTaskId) {
+                const taskElement = document.querySelector(`[data-task-id="${currentEditingTaskId}"]`);
+                if (taskElement) {
+                    const listId = taskElement.dataset.listId;
+                    const taskTitle = taskElement.querySelector('.task-content')?.textContent || 'this task';
+                    deleteTask(currentEditingTaskId, listId, taskTitle);
+                }
+            }
+        });
+    }
+});
+
 
 
 
