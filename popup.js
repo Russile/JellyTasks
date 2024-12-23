@@ -1255,6 +1255,12 @@ async function updateTask(taskId, updates, sourceListId) {
     try {
         const targetListId = document.getElementById('editTaskList')?.value || sourceListId;
         
+        // If a due date is provided, convert it to UTC
+        if (updates.due) {
+            const localDate = new Date(updates.due);
+            updates.due = localDate.toISOString();
+        }
+
         // If the list hasn't changed, just update the task normally
         if (targetListId === sourceListId) {
             const response = await fetch(
@@ -1574,16 +1580,9 @@ async function loadTaskForEdit(taskId, listId) {
         editTaskNotes.value = task.notes || '';
         
         if (task.due) {
-            const date = new Date(task.due);
-            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            
-            // Format date for input
-            const localDate = date.toLocaleDateString('en-CA', { // en-CA gives YYYY-MM-DD format
-                timeZone,
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
-            });
+            // Parse the UTC date string and convert to local YYYY-MM-DD format
+            const utcDate = new Date(task.due);
+            const localDate = utcDate.toISOString().split('T')[0];
             editTaskDate.value = localDate;
         } else {
             editTaskDate.value = '';
